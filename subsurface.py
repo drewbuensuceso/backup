@@ -142,10 +142,10 @@ def fill_smooth(df, offsetstart, end, roll_window_numpts, to_smooth, to_fill):
         
     return(df)
 
-def alert_generator(df):
-    df['alert'] = np.where(abs(df['displacement'] > 0.05), 'L1', 'L0')
-    df['alert'] = np.where(abs(df['vel_xz'] > 0.032), 'L1 velocity', df['alert'])
-    df['alert'] = np.where(abs(df['vel_xz'] > 0.5), 'L2 velocity', df['alert'])
+def alert_generator(df, disp_threshold, vel_threshold):
+    df['alert'] = np.where(abs(df['displacement'] > disp_threshold), 'L1', 'L0')
+    df['alert'] = np.where(abs(df['velocity'] > vel_threshold), 'L1 velocity', df['alert'])
+#    df['alert'] = np.where(abs(df['velocity'] > 0.5), 'L2 velocity', df['alert'])
 
     return(df)
 
@@ -175,10 +175,33 @@ def old_alert_generator(df):
     
     return(df)
     
-#def is_accelerating(df, df_old):
-#    df['actual'] = np.where(df['vel_xz'])
-#    df['predicted'] = 
+def is_accelerating(df, df_old):
+    df['actual'] = np.where((df['velocity'] > df['velocity'].shift(1)) & (abs(df['velocity']) > 0.032), 'p', 'n')
+    df['predicted'] = np.where(abs(df['velocity']) > 0.032, 'p', 'n')
+    
+    return(df)
 
+def confusion_matrix(df):
+    df['con_mat'] = np.where((df['actual'] == 'p') & (df['predicted'] == 'p'), 'true positive', 'none')
+    df['con_mat'] = np.where((df['actual'] == 'n') & (df['predicted'] == 'n'), 'true negative', df['con_mat'])
+    df['con_mat'] = np.where((df['actual'] == 'p') & (df['predicted'] == 'n'), 'false negative', df['con_mat'])
+    df['con_mat'] = np.where((df['actual'] == 'n') & (df['predicted'] == 'p'), 'false positive', df['con_mat'])
+    
+    return(df)
+    
+def roc(df):
+    tp = len(df.loc[df['con_mat'] == 'true positive'])
+    tn = len(df.loc[df['con_mat'] == 'true negative'])
+    fp = len(df.loc[df['con_mat'] == 'false positive'])
+    fn = len(df.loc[df['con_mat'] == 'false negative'])
+    
+    tp_rate = tp/tp+fp
+    fp_rate = fn/tn+fn
+    
+    roc_point = (fp_rate, tp_rate)
+    
+    return(roc_point)
+    
 seg_len = 1
 sub_sensor = 'magta'
 node_id = 15
@@ -274,7 +297,7 @@ df = node_inst_vel(df, roll_window_numpts=7, start=window.start)
 #df_old = df_old.apply(old_node_inst_vel, roll_window_numpts=window.numpts, start=window.start)
 
 df = df.reset_index()
-df = alert_generator(df)
+df = alert_generator(df, 0.05, 0.032)
 #df = df.dropna()
 df = alert_filter(df)
 
@@ -286,7 +309,7 @@ print(df)
 ax5 = fig.add_subplot(715, sharex=ax1)
 ax5.set_ylabel('velocity')
 ax5.get_xaxis().set_visible(False)
-ax5.plot('ts', 'vel_xz', data = df)
+ax5.plot('ts', 'velocity', data = df)
 #plt.axvline(x='2016-10-10 00:00:00', color='r', linestyle='-')
 #plt.axvline(x='2016-10-18 00:00:00', color='r', linestyle='-')
 
